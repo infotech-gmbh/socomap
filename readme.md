@@ -2,6 +2,8 @@
 
 This project is in an early alpha stage.
 It will be improved continously.
+Have a look at the [Roadmap](https://github.com/infotech-gmbh/socomap/wiki/Roadmap) for upcoming
+features.
 
 # Quickstart
 
