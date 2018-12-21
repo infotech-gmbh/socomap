@@ -1,0 +1,8 @@
+version: '3'
+
+services:
+  pushprovider:
+    image: "infotechgmbh/socomap:latest"
+    build: 
+      context: .
+      dockerfile: Dockerfile

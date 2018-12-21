@@ -1,0 +1,530 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "WSR EDI",
+    "description" : "This is the Api for the new WSR EDI Protocol",
+    "termsOfService" : "http://www.infotech.de",
+    "contact" : {
+      "url" : "http://www.infotech.de",
+      "email" : "development@infotech.de"
+    },
+    "version" : "0.0.1"
+  },
+  "servers" : [ {
+    "url" : "http://api.example.com/v1",
+    "description" : "Optional Sample Server for an api Test"
+  } ],
+  "tags" : [ {
+    "name" : "Transfer Functions",
+    "description" : " This Function-Group describes the functions for the Transmission of WSR-Messages. "
+  }, {
+    "name" : "Inbox Functions (Sample)",
+    "description" : " The Receiver Functions are an example, how a message broker can build the user registry an inbox access. This functions are not a part of the EDI protocol. "
+  } ],
+  "paths" : {
+    "/transmissions/create" : {
+      "post" : {
+        "tags" : [ "Transfer Functions" ],
+        "summary" : "create a new transmission",
+        "description" : " this function is creating a new transmission. the transmission is referenced in any further operation for the transmission. <br><br> the creation is split off in this separate function to archieve a reliable messaging. if the response gets lost on the wire, only an empty transmission is created. no transmission is generated in the receiver inbox. <br><br> after the creation a call to TransmissionState returns the field `created`with the timestamp of the creation. <br><br> the parameter target is provided to reject the creation, if no inbox is found on the broker. no further data upload should be done if the inbox is not available. <br><br> the actual sender is not known on api layer. the `response_to` field can be set if the sender expects a response to the transmission. the `response_to` field have to provide a full EDI address. ",
+        "operationId" : "TransmissionsCreate",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "title" : "TransmissionsCreateRequest",
+                "type" : "object",
+                "properties" : {
+                  "target" : {
+                    "title" : "receiver of the message on this broker",
+                    "required" : [ "party" ],
+                    "properties" : {
+                      "deputy" : {
+                        "title" : "the target provider, if used",
+                        "type" : "string",
+                        "x-oad-type" : "string"
+                      },
+                      "party" : {
+                        "title" : "the party",
+                        "type" : "string",
+                        "x-oad-type" : "string"
+                      },
+                      "target_cert_fingerprint" : {
+                        "title" : "certificate fingerprint",
+                        "type" : "string",
+                        "description" : "hash of the used certificate for the encryption",
+                        "x-oad-type" : "string"
+                      }
+                    },
+                    "description" : " the party have to be set in the target. if a `deputy` is provided, the deputy is the encryption endpoint of the transmission. Otherwise the party have to be the enryption endpoint. "
+                  },
+                  "response_to" : {
+                    "title" : "response to this target",
+                    "required" : [ "broker", "party" ],
+                    "properties" : {
+                      "broker" : {
+                        "type" : "string",
+                        "x-oad-type" : "string"
+                      },
+                      "deputy" : {
+                        "type" : "string",
+                        "x-oad-type" : "string"
+                      },
+                      "party" : {
+                        "type" : "string",
+                        "x-oad-type" : "string"
+                      }
+                    }
+                  }
+                },
+                "description" : "Target Inbox for the Transmission",
+                "example" : {
+                  "response_to" : "{}",
+                  "target" : "{}"
+                }
+              }
+            }
+          },
+          "$ref" : "#/components/requestBodies/TransmissionsCreateRequest"
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransmissionsCreateResponse200"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transmissions/{id}/upload" : {
+      "post" : {
+        "tags" : [ "Transfer Functions" ],
+        "summary" : "upload message data",
+        "description" : " after transmission creation. This function is used to upload the pre encrypted WSR message data. <br><br> TODO: Specify encryption method. <br><br> after the upload the transmission state is extended with the field `transferred`. ",
+        "operationId" : "TransmissionsUpload",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "selects the transmission id",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "description" : "binary upload",
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "title" : "Base64UploadTransmission",
+                "type" : "object",
+                "properties" : {
+                  "message" : {
+                    "title" : "base64 encoded message",
+                    "type" : "string",
+                    "description" : " if tne client doesnt support the application/octet-stream format, the data can be uploaded as json. ",
+                    "format" : "base64"
+                  }
+                },
+                "description" : "json version with base64 encoding",
+                "example" : {
+                  "message" : "message"
+                }
+              }
+            },
+            "application/octet-stream" : {
+              "schema" : {
+                "type" : "string",
+                "format" : "binary"
+              }
+            }
+          },
+          "required" : true,
+          "$ref" : "#/components/requestBodies/Base64UploadTransmission"
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          },
+          "404" : {
+            "description" : "transmission not exists"
+          },
+          "412" : {
+            "description" : "if the data was already set."
+          }
+        }
+      }
+    },
+    "/transmissions/{id}/state" : {
+      "get" : {
+        "tags" : [ "Transfer Functions" ],
+        "summary" : "get transmission state",
+        "description" : "returns the current state of the transmission.",
+        "operationId" : "TransmissionState",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "gets the right transmission",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransmissionsStateResponse200"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "transmission not exists"
+          }
+        }
+      }
+    },
+    "/inboxes/create" : {
+      "post" : {
+        "tags" : [ "Inbox Functions (Sample)" ],
+        "summary" : "registers a new inbox",
+        "description" : "This Function creates a new inbox. New Transmissions can be send to this inbox.",
+        "operationId" : "InboxesCreate",
+        "requestBody" : {
+          "content" : {
+            "application:json" : {
+              "schema" : {
+                "title" : "InboxesCreateRequest",
+                "type" : "object",
+                "properties" : {
+                  "party_name" : {
+                    "title" : "name of the party",
+                    "type" : "string"
+                  },
+                  "email" : {
+                    "title" : "email of the party",
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          },
+          "$ref" : "#/components/requestBodies/InboxesCreateRequest"
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK, new inbox is created",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InboxesCreateResponse200"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inboxes/{id}/transmissions/next" : {
+      "get" : {
+        "tags" : [ "Inbox Functions (Sample)" ],
+        "summary" : "get next inbound transmission",
+        "description" : "returns the next inbound transmission. successive calls to this function will return the same transmission, until you confirm the reception.",
+        "operationId" : "InboxesNextTransmission",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "Id of the Inbox",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "returns the wsr message",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InboxesTransmissionNextResponse200"
+                }
+              }
+            }
+          },
+          "204" : {
+            "description" : "no messages in inbox"
+          },
+          "401" : {
+            "description" : "unauthenticated"
+          }
+        },
+        "security" : [ {
+          "api_key" : [ ]
+        } ]
+      }
+    },
+    "/inboxes/{id}/transmissions/{tid}/confirm-received" : {
+      "post" : {
+        "tags" : [ "Inbox Functions (Sample)" ],
+        "summary" : "Update Transmission State",
+        "description" : "Sets the Transmission State ",
+        "operationId" : "/inboxes/{id}/transmissions/{tid}/state",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "the transaction id to confirm",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "tid",
+          "in" : "path",
+          "description" : "Transmission ID",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          },
+          "401" : {
+            "description" : "unauthenticated"
+          },
+          "404" : {
+            "description" : "transmission or onbox not exists"
+          }
+        },
+        "security" : [ {
+          "api_key" : [ ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "TransmissionsStateResponse200" : {
+        "properties" : {
+          "created" : {
+            "title" : "DateTime of the Creation",
+            "type" : "string",
+            "description" : "Is generated at the creation.",
+            "format" : "date-time"
+          },
+          "transferred" : {
+            "title" : "transferred time",
+            "type" : "string",
+            "description" : "date of the data transfer for the transmission",
+            "format" : "date-time"
+          },
+          "delivered" : {
+            "title" : "date of the delivery",
+            "type" : "string",
+            "format" : "date-time"
+          }
+        },
+        "description" : "State of the Transaction",
+        "example" : {
+          "transferred" : "2000-01-23T04:56:07.000+00:00",
+          "created" : "2000-01-23T04:56:07.000+00:00",
+          "delivered" : "2000-01-23T04:56:07.000+00:00"
+        }
+      },
+      "Base64UploadTransmission" : {
+        "title" : "Base64UploadTransmission",
+        "type" : "object",
+        "properties" : {
+          "message" : {
+            "title" : "base64 encoded message",
+            "type" : "string",
+            "description" : " if tne client doesnt support the application/octet-stream format, the data can be uploaded as json. ",
+            "format" : "base64"
+          }
+        },
+        "description" : "json version with base64 encoding",
+        "example" : {
+          "message" : "message"
+        }
+      },
+      "InboxesTransmissionNextResponse200" : {
+        "properties" : {
+          "tid" : {
+            "title" : "transmission id",
+            "type" : "string",
+            "description" : "returns the active transmission id for the nextInbound message"
+          },
+          "message" : {
+            "title" : "message data",
+            "type" : "string",
+            "description" : "encrypted and base64 encoded wsr message data",
+            "format" : "byte"
+          },
+          "target_cert_fingerprint" : {
+            "title" : "encryption target",
+            "type" : "string"
+          }
+        },
+        "description" : "message with the encryption fingerprint",
+        "example" : {
+          "target_cert_fingerprint" : "target_cert_fingerprint",
+          "message" : "message",
+          "tid" : "tid"
+        }
+      },
+      "InboxesCreateResponse200" : {
+        "properties" : {
+          "api_key" : {
+            "title" : "api_key for user_functions",
+            "type" : "string"
+          }
+        },
+        "example" : {
+          "api_key" : "api_key"
+        }
+      },
+      "TransmissionsCreateResponse200" : {
+        "required" : [ "tid" ],
+        "properties" : {
+          "tid" : {
+            "title" : "transmission id",
+            "type" : "string",
+            "description" : "the ident of the new Transmission"
+          }
+        },
+        "description" : "returns the id of the new transmission",
+        "example" : {
+          "tid" : "tid"
+        }
+      },
+      "InboxesCreateRequest" : {
+        "title" : "InboxesCreateRequest",
+        "type" : "object",
+        "properties" : {
+          "party_name" : {
+            "title" : "name of the party",
+            "type" : "string"
+          },
+          "email" : {
+            "title" : "email of the party",
+            "type" : "string"
+          }
+        }
+      },
+      "TransmissionsCreateRequest" : {
+        "title" : "TransmissionsCreateRequest",
+        "type" : "object",
+        "properties" : {
+          "target" : {
+            "title" : "receiver of the message on this broker",
+            "required" : [ "party" ],
+            "properties" : {
+              "deputy" : {
+                "title" : "the target provider, if used",
+                "type" : "string",
+                "x-oad-type" : "string"
+              },
+              "party" : {
+                "title" : "the party",
+                "type" : "string",
+                "x-oad-type" : "string"
+              },
+              "target_cert_fingerprint" : {
+                "title" : "certificate fingerprint",
+                "type" : "string",
+                "description" : "hash of the used certificate for the encryption",
+                "x-oad-type" : "string"
+              }
+            },
+            "description" : " the party have to be set in the target. if a `deputy` is provided, the deputy is the encryption endpoint of the transmission. Otherwise the party have to be the enryption endpoint. "
+          },
+          "response_to" : {
+            "title" : "response to this target",
+            "required" : [ "broker", "party" ],
+            "properties" : {
+              "broker" : {
+                "type" : "string",
+                "x-oad-type" : "string"
+              },
+              "deputy" : {
+                "type" : "string",
+                "x-oad-type" : "string"
+              },
+              "party" : {
+                "type" : "string",
+                "x-oad-type" : "string"
+              }
+            }
+          }
+        },
+        "description" : "Target Inbox for the Transmission",
+        "example" : {
+          "response_to" : "{}",
+          "target" : "{}"
+        }
+      }
+    },
+    "requestBodies" : {
+      "Base64UploadTransmission" : {
+        "content" : {
+          "application/json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Base64UploadTransmission"
+            }
+          },
+          "application/octet-stream" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Base64UploadTransmission"
+            }
+          }
+        }
+      },
+      "InboxesCreateRequest" : {
+        "content" : {
+          "application:json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/InboxesCreateRequest"
+            }
+          }
+        }
+      },
+      "TransmissionsCreateRequest" : {
+        "content" : {
+          "application/json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/TransmissionsCreateRequest"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "api_key" : {
+        "type" : "apiKey",
+        "name" : "api_key",
+        "in" : "header",
+        "scheme" : "bearer",
+        "bearerFormat" : "sha256"
+      }
+    }
+  }
+}

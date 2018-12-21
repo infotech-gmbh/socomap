@@ -1,0 +1,290 @@
+openapi: 3.0.1
+
+info:
+  title: 'SOCOMAP'
+  version: 0.0.1
+  description: 'This API is for the new Socomap Protocol'
+  termsOfService: 'http://www.infotech.de'
+  contact:
+    email: development@infotech.de
+    url: 'http://www.infotech.de'
+
+servers: 
+  - url: http://api.example.com/v1
+    description: Optional Sample Server for an api Test
+
+components:
+  securitySchemes:
+    api_key:            # arbitrary name for the security scheme
+      name: "api_key"
+      type: apiKey
+      in: header
+      scheme: bearer
+      bearerFormat: sha256    # optional, arbitrary value for documentation purposes
+
+tags:
+  - name: 'Transfer Functions'
+    description: "
+      This Function-Group describes the functions for the Transmission of WSR-Messages.
+      "
+  - name: 'Inbox Functions (Sample)'
+    description: "
+      The Receiver Functions are an example, how a message broker can build the user registry an inbox access.
+      This functions are not a part of the EDI protocol.
+      "
+
+paths:
+  /transmissions/create:
+    post:
+      operationId: TransmissionsCreate
+      summary: 'create a new transmission'
+      description: "
+       this function is creating a new transmission. 
+       the transmission is referenced in any further operation for the transmission.
+       <br><br>
+       the creation is split off in this separate function to archieve a reliable messaging. 
+       if the response gets lost on the wire, only an empty transmission is created.
+       no transmission is generated in the receiver inbox.
+       <br><br>
+       after the creation a call to TransmissionState returns the field `created`with the timestamp
+       of the creation.
+       <br><br>
+       the parameter target is provided to reject the creation, if no inbox is found on the broker.
+       no further data upload should be done if the inbox is not available.
+       <br><br>
+       the actual sender is not known on api layer. 
+       the `response_to` field can be set if the sender expects a response to the transmission.
+       the `response_to` field have to provide a full EDI address.
+       "
+      tags:
+        - 'Transfer Functions'
+      responses:
+        '200':
+          description: 'OK'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransmissionsCreateResponse200"
+        '429':
+          description: 'too many requests'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransmissionsCreateRequest"
+  /transmissions/{tid}/upload:
+    post:
+      operationId: TransmissionsUpload
+      summary: 'upload message data'
+      description: "
+        after transmission creation. This function is used to
+        upload the pre encrypted WSR message data.
+        <br><br>
+        TODO: Specify encryption method.
+        <br><br>
+        after the upload the transmission state is extended with the field `transferred`.
+        "
+      tags:
+        - 'Transfer Functions'
+      parameters:
+        - name: tid
+          in: path
+          description: 'selects the transmission id' 
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: "binary upload"
+        required: true
+        content: 
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Base64UploadTransmission"
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: 'OK, data uploaded'
+        '404':
+          description: 'transmission not exists'
+        '412':
+          description: 'data already uploaded'
+  /transmissions/{tid}/state:
+    get:
+      operationId: TransmissionState
+      summary: 'get transmission state'
+      description: "returns the current state of the transmission."
+      tags:
+        - 'Transfer Functions'
+      parameters:
+        - in: path
+          name: tid
+          description: 'gets the right transmission'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransmissionsStateResponse200"
+        '404':
+          description: 'transmission not exists'
+  # inbox functions
+  /inboxes/create:
+    post:
+      operationId: InboxesCreate
+      summary: 'registers a new inbox'
+      description: "This Function creates a new inbox.
+        New Transmissions can be send to this inbox."
+      tags:
+        - 'Inbox Functions (Sample)'
+      requestBody:
+        content:
+          application:json:
+            schema:
+              $ref: "#/components/schemas/InboxesCreateRequest"
+      responses:
+        '200':
+          description: 'OK, new inbox is created'
+          content:
+            application/json:
+              schema:
+                type: "object"
+                $ref: "#/components/schemas/InboxesCreateResponse200"
+        '409':
+          description: 'An inbox for this party name already exists'
+  /inboxes/{id}/transmissions/next:
+    get:
+      operationId: 'InboxesNextTransmission'
+      summary: 'get next inbound transmission'
+      description: "returns the next inbound transmission.
+        successive calls to this function will return the same transmission, until
+        you confirm the reception."
+      security:
+        - api_key: []
+      tags:
+        - 'Inbox Functions (Sample)'
+      parameters:
+        - in: path
+          name: id
+          description: 'Id of the Inbox'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'returns the wsr message'
+          content:
+            application/json:
+              schema:
+                 $ref: "#/components/schemas/InboxesTransmissionNextResponse200"
+        '204':
+          description: 'no messages in inbox'
+        '401':
+          description: unauthenticated
+        '404':
+          description: 'inbox does not exists'
+  /inboxes/{id}/transmissions/{tid}/confirm-received:
+    post:
+      operationId: '/inboxes/{id}/transmissions/{tid}/state'
+      summary: 'Update Transmission State'
+      description: "Sets the Transmission State "
+      security:
+        - api_key: []
+      tags:
+        - 'Inbox Functions (Sample)'
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: 'the transaction id to confirm'
+          schema:
+            type: string
+        - in: path
+          name: tid
+          description: 'Transmission ID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: unauthenticated
+        '404':
+          description: 'transmission or onbox not exists'
+components:
+  schemas:
+    TransmissionsCreateResponse200:
+      description: 'returns the id of the new transmission'
+      properties:
+        tid:
+          type: string
+          title: 'transmission id'
+          description: 'the ident of the new Transmission'
+      required:
+        - tid
+    TransmissionsCreateRequest:
+      description: 'Target Inbox for the Transmission'
+      properties:
+        party: {type: string, title: 'the party'}
+      required:
+        - party
+    Base64UploadTransmission:
+      description: 'json version with base64 encoding'
+      properties:
+        message:
+          type: string
+          title: 'base64 encoded message'
+          description: '
+            if tne client doesnt support the application/octet-stream format,
+            the data can be uploaded as json.
+            '
+          format: base64
+    TransmissionsStateResponse200:
+      description: 'State of the Transaction'
+      properties:
+        created:
+          type: string
+          title: 'DateTime of the Creation'
+          description: 'Is generated at the creation.'
+          format: date-time
+        transferred:
+          type: string
+          title: 'transferred time'
+          description: 'date of the data transfer for the transmission'
+          format: date-time
+        delivered:
+          type: string
+          title: 'date of the delivery'
+          format: date-time
+    InboxesCreateRequest:
+      properties:
+        party_name:
+          type: string
+          title: 'name of the party'
+        email:
+          type: string
+          title: 'email of the party'
+    InboxesCreateResponse200:
+      properties:
+        api_key:
+          type: string
+          title: 'api_key for user_functions'
+    InboxesTransmissionNextResponse200:
+      description: 'message with the encryption fingerprint'
+      properties:
+        tid:
+          type: string
+          title: 'transmission id'
+          description: 'returns the active transmission id for the nextInbound message'
+        message:
+          type: string
+          title: 'message data'
+          description: 'encrypted and base64 encoded wsr message data'
+          format: byte

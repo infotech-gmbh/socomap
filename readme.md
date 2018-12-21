@@ -7,7 +7,7 @@ features.
 
 # Quickstart
 
-If you just want to run your own socomap server you need an installed [Docker](https://www.docker.com/get-started)
+If you just want to run your own socomap server you need an installed [Docker](https://www.docker.com/get-started).
 
 Download this [docker-compose.yml](https://github.com/infotech-gmbh/socomap-samples/blob/master/samples/server/docker-compose.yml) file and run it:
 
