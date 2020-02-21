@@ -27,7 +27,7 @@ messages to each inboxes.
 The protocol is designed to have a reliable data transfer, where
 the sender is informed when the receiver got the message (confirmed by receiver).
 
-![architecture image](docs/img/peer_to_peer_with_broker.png)
+![architecture image](docs/res/peer_to_peer_with_broker.png)
 
 The transferred messages can completely be specified by the user agents and can contain binary data.
 
